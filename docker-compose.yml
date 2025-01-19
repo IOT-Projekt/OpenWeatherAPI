@@ -1,0 +1,12 @@
+---
+services:
+  perceived-temp-service:
+    container_name: open-weather
+    image: open-weather:latest
+    environment:
+      - 'KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS}' 
+      - 'KAFKA_GROUP_ID=${KAFKA_GROUP_ID}' 
+      - 'KAFKA_TOPIC=${KAFKA_TOPIC}'
+      - 'OPEN_WEATHER_API_KEY=${OPEN_WEATHER_API_KEY}'
+    deploy:
+      replicas: 1
