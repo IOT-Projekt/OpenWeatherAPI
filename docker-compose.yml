@@ -2,7 +2,7 @@
 services:
   perceived-temp-service:
     container_name: open-weather
-    image: open-weather:latest
+    image: svenschmidt1502/open-weather:latest
     environment:
       - 'KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS}' 
       - 'KAFKA_GROUP_ID=${KAFKA_GROUP_ID}' 
