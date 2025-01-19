@@ -47,4 +47,4 @@ if __name__ == "__main__":
         # Send the weather data to Kafka
         send_kafka_message(openweather_producer, KAKFA_TOPIC, weather_dict)
         
-        time.sleep(10)
+        time.sleep(120)
