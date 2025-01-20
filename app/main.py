@@ -2,15 +2,30 @@ import time
 from typing import Dict
 import requests
 import os
-from kafka_handler import KafkaConfig, setup_kafka_producer, send_kafka_message
+import paho.mqtt.client as mqtt
+import logging
+import signal
+import json
 
-API_KEY = os.getenv("OPEN_WEATHER_API_KEY")
-KAKFA_TOPIC = os.getenv("KAFKA_TOPIC", "openweather_data")
+# setup logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+
+# Environment variables
+API_KEY = os.getenv("API_KEY")
+BROKER_IP = os.getenv("BROKER_IP", "localhost")
+CLIENT_ID = os.getenv("CLIENT_ID", "openweather-mqtt")
+MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", "")
+MQTT_USERNAME = os.getenv("MQTT_USERNAME", "")
+TOPIC = os.getenv("TOPIC", "iot/devices/open_weather")
+BROKER_PORT = int(os.getenv("BROKER_PORT", 1883))
+
 
 def get_openweather_data():
     # Create the API call URL
     url = f"https://api.openweathermap.org/data/3.0/onecall?lat=49,150002&lon=9,216600&exclude=hourly,daily&appid={API_KEY}"
-    
+
     # Make the API call and return the content, if successful
     response = requests.get(url)
     if response.status_code == 200:
@@ -18,33 +33,121 @@ def get_openweather_data():
     else:
         return None
 
+
+def on_connect(client, userdata, flags, rc):
+    """
+    Callback triggered when the client connects to the broker.
+    """
+    if rc == 0:
+        logging.info("Connected to MQTT broker.")
+        client.connected_flag = True
+    else:
+        logging.error(f"Connection failed with return code {rc}")
+        client.connected_flag = False
+
+
+def on_publish(client, userdata, message_id):
+    """
+    Callback triggered when a message is published.
+    """
+    logging.info(f"Message {message_id} published successfully.")
+
+
+def shutdown(client):
+    """
+    Gracefully stops the MQTT client and disconnects.
+    """
+    global RUNNING
+    RUNNING = False
+    logging.info("Shutting down...")
+    if client:
+        client.loop_stop()
+        client.disconnect()
+        logging.info("Disconnected from MQTT broker.")
+
+
+def handle_signals(signal_num, frame):
+    """
+    Handles termination signals for Docker.
+    """
+    logging.info(f"Received termination signal: {signal_num}")
+    shutdown(client=None)
+
+
+def configure_mqtt_client(client_id):
+    """
+    Configures the MQTT client with callbacks and credentials.
+    """
+    logging.info("Configuring MQTT client...")
+    client = mqtt.Client(client_id)
+    client.connected_flag = False
+
+    # Set username and password for authentication
+    client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+
+    # Bind callbacks
+    client.on_connect = on_connect
+    client.on_publish = on_publish
+
+    # Register signal handlers for Docker
+    signal.signal(signal.SIGTERM, handle_signals)
+    signal.signal(signal.SIGINT, handle_signals)
+
+    # Connect to the broker
+    try:
+        logging.info("Connecting to broker...")
+        client.connect(BROKER_IP, BROKER_PORT)
+        client.loop_start()
+        while not client.connected_flag:
+            logging.info("Waiting for connection...")
+            time.sleep(1)
+    except Exception as e:
+        logging.error(f"Failed to connect to MQTT broker: {e}")
+        shutdown(client)
+        return
+
+    return client
+
+
 def extract_weather_data(response_json) -> Dict[str, float]:
     # Extract the current weather data from the response
     current_weather = response_json.get("current")
-    
+
     # Return the extracted data as a dictionary
     return {
-        "temperature": current_weather.get("temp") - 273.15, # Convert to Celsius from Kelvin
-        "feels_like": current_weather.get("feels_like") - 273.15, # Convert to Celsius from Kelvin
+        "temperature": current_weather.get("temp")
+        - 273.15,  # Convert to Celsius from Kelvin
+        "feels_like": current_weather.get("feels_like")
+        - 273.15,  # Convert to Celsius from Kelvin
         "humidity": current_weather.get("humidity"),
     }
 
+
 if __name__ == "__main__":
-    
+
     while True:
         # Fetch OpenWeather data
         response_json = get_openweather_data()
         if not response_json:
-            print("Failed to fetch OpenWeather data")
-        
+            logging.error("Failed to fetch OpenWeather data")
+
         # Extract weather data
         weather_dict = extract_weather_data(response_json)
-        
-        # Get kafka producer
-        kafka_config = KafkaConfig()
-        openweather_producer = setup_kafka_producer(kafka_config)
-        
-        # Send the weather data to Kafka
-        send_kafka_message(openweather_producer, KAKFA_TOPIC, weather_dict)
-        
+
+        # Get Mqtt Client
+        client = configure_mqtt_client(CLIENT_ID)
+
+        # Send the weather data to MQTT broker
+        payload = json.dumps(
+            {
+                "source": "mqtt",
+                "device_id": CLIENT_ID,
+                "humidity": weather_dict["humidity"],
+                "temperature": weather_dict["temperature"],
+                "feels_like": weather_dict["feels_like"],
+            }
+        )
+        client.publish(TOPIC, payload)
+
+        # Wait for 2 minutes before fetching new
         time.sleep(120)

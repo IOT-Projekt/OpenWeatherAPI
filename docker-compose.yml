@@ -4,9 +4,12 @@ services:
     container_name: open-weather
     image: svenschmidt1502/open_weather:latest
     environment:
-      - 'KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS}' 
-      - 'KAFKA_GROUP_ID=${KAFKA_GROUP_ID}' 
-      - 'KAFKA_TOPIC=${KAFKA_TOPIC}'
-      - 'OPEN_WEATHER_API_KEY=${OPEN_WEATHER_API_KEY}'
+      - API_KEY=${API_KEY}
+      - BROKER_IP=${BROKER_IP}
+      - BROKER_PORT=${BROKER_PORT}
+      - CLIENT_ID=${CLIENT_ID}
+      - MQTT_PASSWORD=${MQTT_PASSWORD}
+      - MQTT_USERNAME=${MQTT_USERNAME}
+      - TOPIC=${TOPIC}
     deploy:
       replicas: 1
