@@ -124,7 +124,9 @@ def extract_weather_data(response_json) -> Dict[str, float]:
 
 
 if __name__ == "__main__":
-
+    # Configure the MQTT client
+    client = configure_mqtt_client(CLIENT_ID)
+    
     while True:
         # Fetch OpenWeather data
         response_json = get_openweather_data()
@@ -133,9 +135,6 @@ if __name__ == "__main__":
 
         # Extract weather data
         weather_dict = extract_weather_data(response_json)
-
-        # Get Mqtt Client
-        client = configure_mqtt_client(CLIENT_ID)
 
         # Send the weather data to MQTT broker
         payload = json.dumps(
