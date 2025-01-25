@@ -20,11 +20,12 @@ MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", "")
 MQTT_USERNAME = os.getenv("MQTT_USERNAME", "")
 TOPIC = os.getenv("TOPIC", "iot/devices/open_weather")
 BROKER_PORT = int(os.getenv("BROKER_PORT", 1883))
-
+LATITUDE = os.getenv("LATITUDE", "49.150002")
+LONGITUDE = os.getenv("LONGITUDE", "9.216600")
 
 def get_openweather_data():
-    # Create the API call URL
-    url = f"https://api.openweathermap.org/data/3.0/onecall?lat=49,150002&lon=9,216600&exclude=hourly,daily&appid={API_KEY}"
+    # Create the API call URL, see as reference: https://openweathermap.org/api/one-call-api
+    url = f"https://api.openweathermap.org/data/3.0/onecall?lat={LATITUDE}&lon={LONGITUDE}&exclude=hourly,daily&appid={API_KEY}"
 
     # Make the API call and return the content, if successful
     response = requests.get(url)
@@ -33,11 +34,8 @@ def get_openweather_data():
     else:
         return None
 
-
+# Callback for connection logging
 def on_connect(client, userdata, flags, rc):
-    """
-    Callback triggered when the client connects to the broker.
-    """
     if rc == 0:
         logging.info("Connected to MQTT broker.")
         client.connected_flag = True
@@ -45,18 +43,13 @@ def on_connect(client, userdata, flags, rc):
         logging.error(f"Connection failed with return code {rc}")
         client.connected_flag = False
 
-
+# Callback for publish logging
 def on_publish(client, userdata, message_id):
-    """
-    Callback triggered when a message is published.
-    """
     logging.info(f"Message {message_id} published successfully.")
 
 
 def shutdown(client):
-    """
-    Gracefully stops the MQTT client and disconnects.
-    """
+    """Gracefully stops the MQTT client and disconnects."""
     global RUNNING
     RUNNING = False
     logging.info("Shutting down...")
@@ -67,17 +60,13 @@ def shutdown(client):
 
 
 def handle_signals(signal_num, frame):
-    """
-    Handles termination signals for Docker.
-    """
+    """Handles termination signals for Docker."""
     logging.info(f"Received termination signal: {signal_num}")
     shutdown(client=None)
 
 
 def configure_mqtt_client(client_id):
-    """
-    Configures the MQTT client with callbacks and credentials.
-    """
+    """Configures the MQTT client with callbacks and credentials."""
     logging.info("Configuring MQTT client...")
     client = mqtt.Client(client_id)
     client.connected_flag = False
@@ -93,7 +82,7 @@ def configure_mqtt_client(client_id):
     signal.signal(signal.SIGTERM, handle_signals)
     signal.signal(signal.SIGINT, handle_signals)
 
-    # Connect to the broker
+    # Connect to the broker, if not successful try again after 1 second
     try:
         logging.info("Connecting to broker...")
         client.connect(BROKER_IP, BROKER_PORT)
